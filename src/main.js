@@ -6,6 +6,8 @@ import moment from "moment"
 import VueAxios from "vue-axios"
 import axios from "axios"
 import Vuex from "vuex"
+import VueSocketIO from "vue-socket.io"
+import VueMeta from "vue-meta"
 import "normalize.css"
 
 Vue.config.productionTip = false
@@ -18,24 +20,27 @@ Vue.use(Vuex)
 
 Vue.use(VueAxios, axios)
 
+Vue.use(VueMeta)
+
+Vue.use(
+  new VueSocketIO({
+    debug: true,
+    connection: "http://localhost",
+  }),
+)
 const store = new Vuex.Store({
   state: {
     name: "",
-    avatarURL: `http://omratag7g.bkt.clouddn.com/icon-avatar${Vue.prototype.random(
-      21,
-    )}.svg`,
     addr: "",
-    isShowAbout: false,
+    avatarURL: "",
   },
   mutations: {
-    setName(state, name) {
-      state.name = name
+    setName(state, username) {
+      state.username = username
+      localStorage.username = username
     },
     setAddr(state, addr) {
       state.addr = addr
-    },
-    showAbout(state, flag) {
-      state.isShowAbout = flag
     },
   },
 })
