@@ -1,49 +1,30 @@
-import Vue from "vue"
 import "es6-promise/auto"
+import Vue from "vue"
 import App from "./App.vue"
 import router from "./router"
-import moment from "moment"
-import VueAxios from "vue-axios"
-import axios from "axios"
 import Vuex from "vuex"
-import VueSocketIO from "vue-socket.io"
+import store from "./store"
+import axios from "axios"
+import VueAxios from "vue-axios"
+import { io } from "socket.io-client"
+import VueSocketIOExt from "vue-socket.io-extended"
 import VueMeta from "vue-meta"
+import moment from "moment"
 import "normalize.css"
 
 Vue.config.productionTip = false
 
 moment.locale("zh-cn")
 Vue.prototype.moment = moment
-Vue.prototype.random = n => Math.floor(n * Math.random())
+const apiBaseURL = process.env.VUE_APP_API_BASE_URL
+const socketURL = process.env.VUE_APP_SOCKET_URL
+const socket = io(socketURL, { autoConnect: true })
 
 Vue.use(Vuex)
-
 Vue.use(VueAxios, axios)
-
+axios.defaults.baseURL = apiBaseURL
 Vue.use(VueMeta)
-
-Vue.use(
-  new VueSocketIO({
-    debug: true,
-    connection: "http://localhost",
-  }),
-)
-const store = new Vuex.Store({
-  state: {
-    name: "",
-    addr: "",
-    avatarURL: "",
-  },
-  mutations: {
-    setName(state, username) {
-      state.username = username
-      localStorage.username = username
-    },
-    setAddr(state, addr) {
-      state.addr = addr
-    },
-  },
-})
+Vue.use(VueSocketIOExt, socket, { store })
 
 new Vue({
   store: store,

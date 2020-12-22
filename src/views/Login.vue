@@ -20,22 +20,40 @@
 <script>
 import Vue from "vue"
 import { Input } from "ant-design-vue"
+import UUID from "vue-uuid"
+
+const roomID = process.env.VUE_APP_ROOM_ID
+const NAMESPACE = "65f9af5d-f23f-4065-ac85-da725569fdcd"
+
 Vue.use(Input)
+Vue.use(UUID)
 
 export default {
   username: "login",
   data() {
-    return {
-      username: "",
-    }
+    return { username: "" }
   },
   methods: {
     login() {
-      console.log(this.username)
       if (this.username === "") {
-        return
+        throw Error("用户名为空")
       }
+      const avatarURL = this.username.slice(0, 1).toUpperCase()
+      const userID = this.$uuid.v5(this.username, NAMESPACE)
+      this.axios
+        .post("/user/login", {
+          name: this.username,
+          avatarURL: avatarURL,
+          roomID: roomID,
+          userID: userID,
+        })
+        .then(response => {
+          this.$store.commit("setToken", response.data.data.token)
+        })
       this.$store.commit("setName", this.username)
+      this.$store.commit("setAvatarURL", avatarURL)
+      this.$store.commit("setRoomID", roomID)
+      this.$store.commit("setUserID", userID)
       this.$router.push("Chatting")
     },
   },
@@ -43,9 +61,11 @@ export default {
 </script>
 <style lang="less">
 .login {
-  margin-top: 45vh;
+  padding-top: 45vh;
 }
-.input {
-  padding: 0 1rem 0 1rem;
+@media screen and (min-device-width: 400px) {
+  .input {
+    padding: 0 10rem;
+  }
 }
 </style>

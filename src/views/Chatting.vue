@@ -3,60 +3,62 @@
     <header>
       <a-page-header title="沟通ing" @back="$router.push('/')" />
     </header>
-    <dynamic-scroller
-      :items="msgs"
-      :min-item-size="54"
-      class="scroller"
-      ref="scroller"
-      role="main"
-    >
-      <template v-slot="{ item, index, active }">
-        <dynamic-scroller-item
-          :item="item"
-          :active="active"
-          :size-dependencies="[item.content]"
-          :data-index="index"
-        >
-          <!-- 自己说的在右边 -->
-          <div v-if="item.self" class="self">
-            <div class="self">
-              <div class="avatar">
-                <a-avatar style="color: #f56a00; backgroundColor: #fde3cf">
-                  {{ item.avatarURL }}
-                </a-avatar>
-              </div>
-              <div class="content">
-                <div class="author">
-                  <a class="name">{{ item.from }}</a>
-                  <a-tooltip class="time" :title="item.date">
-                    <span>{{ moment(item.date).fromNow() }}</span>
-                  </a-tooltip>
+    <main>
+      <dynamic-scroller
+        :items="msgs"
+        :min-item-size="54"
+        class="scroller"
+        ref="scroller"
+        role="main"
+      >
+        <template v-slot="{ item, index, active }">
+          <dynamic-scroller-item
+            :item="item"
+            :active="active"
+            :size-dependencies="[item.content]"
+            :data-index="index"
+          >
+            <!-- self right -->
+            <div v-if="item.self" class="self">
+              <div class="self">
+                <div class="avatar">
+                  <a-avatar style="color: #f56a00; backgroundColor: #fde3cf">
+                    {{ item.avatarURL }}
+                  </a-avatar>
                 </div>
-                <p class="message">
-                  {{ item.content }}
-                </p>
+                <div class="content">
+                  <div class="author">
+                    <a class="name">{{ item.from }}</a>
+                    <a-tooltip class="time" :title="item.date">
+                      <span>{{ moment(item.date).fromNow() }}</span>
+                    </a-tooltip>
+                  </div>
+                  <p class="message">
+                    {{ item.content }}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-          <!-- 别人说的在左边 -->
-          <a-comment v-else>
-            <a slot="author">{{ item.from }}</a>
-            <a-avatar
-              slot="avatar"
-              style="color: #f56a00; backgroundColor: #fde3cf"
-            >
-              {{ item.avatarURL }}
-            </a-avatar>
-            <p slot="content">
-              {{ item.content }}
-            </p>
-            <a-tooltip slot="datetime" :title="item.date">
-              <span>{{ moment(item.date).fromNow() }}</span>
-            </a-tooltip>
-          </a-comment>
-        </dynamic-scroller-item>
-      </template>
-    </dynamic-scroller>
+            <!-- others left -->
+            <a-comment v-else>
+              <a slot="author">{{ item.from }}</a>
+              <a-avatar
+                slot="avatar"
+                style="color: #f56a00; backgroundColor: #fde3cf"
+              >
+                {{ item.avatarURL }}
+              </a-avatar>
+              <p slot="content">
+                {{ item.content }}
+              </p>
+              <a-tooltip slot="datetime" :title="item.date">
+                <span>{{ moment(item.date).fromNow() }}</span>
+              </a-tooltip>
+            </a-comment>
+          </dynamic-scroller-item>
+        </template>
+      </dynamic-scroller>
+    </main>
     <footer>
       <a-input-search
         @search="onSend"
@@ -104,13 +106,10 @@ export default {
   },
   data() {
     return {
-      msgs:
-        (localStorage.msgs_group && JSON.parse(localStorage.msgs_group)) ||
-        [
-          // { date: '2015-11-09 09:57:08', loc: '江西省南昌市', from: 'microzz', avatarURL: `https://icdn.microzz.com/20170426_vue_chat/icon-avatar${this.random(11)}.svg`, content: 'test', self: false}
-        ],
+      msgs: this.msgs || [],
       inputContent: "",
       onContent: {},
+      ERROR_CODES: this.$store.state.ERROR_CODES,
     }
   },
   metaInfo: {
@@ -125,22 +124,21 @@ export default {
       },
     ],
   },
-  watch: {
-    msgs(val) {
-      localStorage.msgs_group = JSON.stringify(val)
-    },
-  },
   computed: {
     username() {
       return localStorage.username
     },
-    avatarURL() {
-      if (!this.username) {
-        return
-      }
-      return this.username.slice(0, 1).toUpperCase()
+    roomID() {
+      return localStorage.roomID
     },
-    id() {
+    avatarURL() {
+      return localStorage.avatarURL
+    },
+    userID() {
+      return localStorage.userID
+    },
+    // 消息id
+    messageId() {
       const len = this.msgs.length
       if (!this.msgs || len === 0) {
         return 0
@@ -149,6 +147,14 @@ export default {
     },
     message() {
       return {
+        roomID: this.roomID,
+        userID: this.userID,
+        type: 1,
+        message: this.inputContent,
+      }
+    },
+    showMessage() {
+      return {
         date: this.moment().format("YYYY-MM-DD HH:mm:ss"),
         from: `${localStorage.username}`,
         content: this.inputContent,
@@ -156,6 +162,41 @@ export default {
         id: this.id,
         self: true,
       }
+    },
+  },
+  sockets: {
+    connect() {
+      console.log("socket connection succeed")
+    },
+    socketerror(param) {
+      if (param.code) {
+        console.err("Error", this.ERROR_CODES[param.code])
+      } else {
+        console.err("Error", "Unknown Error")
+      }
+    },
+    newUser(param) {
+      // 登陆提示
+      console.log(param)
+    },
+    userLeft(param) {
+      // 退出提示
+      console.log(param)
+    },
+    newMessage(param) {
+      console.log(param)
+    },
+    sendTyping(param) {
+      console.log(param)
+    },
+    login(param) {
+      console.log(param)
+    },
+    logout(param) {
+      console.log(param)
+    },
+    messageUpdated(param) {
+      console.log(param)
     },
   },
 
@@ -168,10 +209,6 @@ export default {
   },
 
   mounted() {
-    this.$socket.emit("login", this.username)
-    this.$socket.on("messageUpdated", message => {
-      this.msgs.push(message)
-    })
     setTimeout(() => {
       this.scrollToBottom()
     }, 0)
@@ -182,18 +219,16 @@ export default {
       if (this.inputContent === "") {
         return
       } else {
-        this.$socket.emit("sendMessage", this.message)
-        this.msgs.push(this.message)
+        this.$socket.client.emit("sendMessage", this.message)
+        console.log(this.$store.state.message)
+        this.msgs.push(this.showMessage)
         this.inputContent = ""
-        console.log(this.message)
         setTimeout(() => {
           this.scrollToBottom()
         })
       }
     },
     scrollToBottom() {
-      // let scroller = this.$refs.scroller
-      // scroller.scrollTop = scroller.scrollHeight
       this.$refs.scroller.scrollToBottom()
     },
   },
@@ -207,31 +242,39 @@ body {
 .chatting {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  min-height: 100vh;
 }
 header {
   width: 100%;
   border: 1px solid rgb(235, 237, 240);
+  height: 8vh;
+}
+main {
+  height: 86vh;
 }
 .scroller {
   flex: 1;
   overflow-y: auto;
-  margin: 0 0.75rem;
+  padding: 0 1rem;
 }
 @media screen and (min-device-width: 400px) {
   .chatting {
     margin: 0 10rem;
   }
-  .scroller {
-    border: 1px solid rgb(235, 237, 240);
-    margin: 0;
+  main {
+    border: 1px solid #ebedf0;
   }
 }
 footer {
   bottom: 0;
+  height: 6vh;
 }
+// self right style
 .ant-btn-lg {
   border-radius: 0;
+}
+.item {
+  margin: 0, 2rem;
 }
 .self {
   display: flex;
@@ -244,12 +287,9 @@ footer {
 .avatar {
   margin-left: 0.75rem;
   cursor: pointer;
-  color: rgba(0, 0, 0, 0.65);
   line-height: 1.5;
 }
 .time {
-  font-variant: tabular-nums;
-  font-feature-settings: "tnum";
   color: #ccc;
   white-space: nowrap;
   cursor: auto;
