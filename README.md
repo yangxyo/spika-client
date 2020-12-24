@@ -1,24 +1,25 @@
 # spika-client
 
-## Project setup
+## 基础配置
+
+.env 文件
+
+保证每个前端项目的以下值唯一
+VUE_APP_ROOM_ID=1
+
+后端地址
+VUE_APP_API_BASE_URL=http://10.180.104.182/spika/v1
+VUE_APP_SOCKET_URL=http://10.180.104.182/spika
+
+## 项目依赖安装及运行
+
 ```
 yarn install
-```
-
-### Compiles and hot-reloads for development
-```
 yarn serve
 ```
 
-### Compiles and minifies for production
+### 生产环境编译
+
 ```
 yarn build
 ```
-
-### Lints and fixes files
-```
-yarn lint
-```
-
-### Customize configuration
-See [Configuration Reference](https://cli.vuejs.org/config/).
