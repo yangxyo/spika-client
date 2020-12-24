@@ -18,7 +18,10 @@ moment.locale("zh-cn")
 Vue.prototype.moment = moment
 const apiBaseURL = process.env.VUE_APP_API_BASE_URL
 const socketURL = process.env.VUE_APP_SOCKET_URL
-const socket = io(socketURL, { autoConnect: true })
+const socket = io(socketURL, {
+  transports: ["websocket"],
+  "force new connection": true,
+})
 
 Vue.use(Vuex)
 Vue.use(VueAxios, axios)

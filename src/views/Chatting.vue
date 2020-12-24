@@ -3,65 +3,64 @@
     <header>
       <a-page-header title="沟通ing" @back="$router.push('/')" />
     </header>
-    <main>
-      <dynamic-scroller
-        :items="msgs"
-        :min-item-size="54"
-        class="scroller"
-        ref="scroller"
-        role="main"
-      >
-        <template v-slot="{ item, index, active }">
-          <dynamic-scroller-item
-            :item="item"
-            :active="active"
-            :size-dependencies="[item.content]"
-            :data-index="index"
-          >
-            <!-- self right -->
-            <div v-if="item.self" class="self">
-              <div class="self">
-                <div class="avatar">
-                  <a-avatar style="color: #f56a00; backgroundColor: #fde3cf">
-                    {{ item.avatarURL }}
-                  </a-avatar>
+    <dynamic-scroller
+      :items="messagesList"
+      :min-item-size="54"
+      class="scroller"
+      ref="scroller"
+      role="main"
+      key-field="_id"
+    >
+      <template v-slot="{ item, index, active }">
+        <dynamic-scroller-item
+          :item="item"
+          :active="active"
+          :size-dependencies="[item.message]"
+          :data-index="index"
+        >
+          <!-- self right -->
+          <div v-if="self(item.userID)" class="self">
+            <div class="self">
+              <div class="avatar">
+                <a-avatar style="color: #f56a00; backgroundColor: #fde3cf">
+                  {{ item.user.avatarURL }}
+                </a-avatar>
+              </div>
+              <div class="content">
+                <div class="author">
+                  <a class="name">{{ item.user.name }}</a>
+                  <a-tooltip class="time" :title="item.created">
+                    <span>{{ moment(item.date).fromNow() }}</span>
+                  </a-tooltip>
                 </div>
-                <div class="content">
-                  <div class="author">
-                    <a class="name">{{ item.from }}</a>
-                    <a-tooltip class="time" :title="item.date">
-                      <span>{{ moment(item.date).fromNow() }}</span>
-                    </a-tooltip>
-                  </div>
-                  <p class="message">
-                    {{ item.content }}
-                  </p>
-                </div>
+                <p class="message">
+                  {{ item.message }}
+                </p>
               </div>
             </div>
-            <!-- others left -->
-            <a-comment v-else>
-              <a slot="author">{{ item.from }}</a>
-              <a-avatar
-                slot="avatar"
-                style="color: #f56a00; backgroundColor: #fde3cf"
-              >
-                {{ item.avatarURL }}
-              </a-avatar>
-              <p slot="content">
-                {{ item.content }}
-              </p>
-              <a-tooltip slot="datetime" :title="item.date">
-                <span>{{ moment(item.date).fromNow() }}</span>
-              </a-tooltip>
-            </a-comment>
-          </dynamic-scroller-item>
-        </template>
-      </dynamic-scroller>
-    </main>
+          </div>
+          <!-- others left -->
+          <a-comment v-else>
+            <a slot="author">{{ item.user.name }}</a>
+            <a-avatar
+              slot="avatar"
+              style="color: #f56a00; backgroundColor: #fde3cf"
+            >
+              {{ item.user.avatarURL }}
+            </a-avatar>
+            <p slot="content">
+              {{ item.message }}
+            </p>
+            <a-tooltip slot="datetime" :title="item.created">
+              <span>{{ moment(item.date).fromNow() }}</span>
+            </a-tooltip>
+          </a-comment>
+        </dynamic-scroller-item>
+      </template>
+    </dynamic-scroller>
     <footer>
       <a-input-search
-        @search="onSend"
+        @search="sendMessage"
         enter-button="发送"
         placeholder="input messages"
         size="large"
@@ -76,6 +75,7 @@
 
 <script>
 import Vue from "vue"
+import { mapState } from "vuex"
 import { DynamicScroller, DynamicScrollerItem } from "vue-virtual-scroller"
 import "vue-virtual-scroller/dist/vue-virtual-scroller.css"
 import {
@@ -88,6 +88,7 @@ import {
   Row,
   Col,
 } from "ant-design-vue"
+import CONST from "@/consts.js"
 
 Vue.use(PageHeader)
 Vue.use(Comment)
@@ -97,6 +98,8 @@ Vue.use(Avatar)
 Vue.use(Button)
 Vue.use(Row)
 Vue.use(Col)
+
+const roomID = process.env.VUE_APP_ROOM_ID
 
 export default {
   name: "chatting",
@@ -109,7 +112,7 @@ export default {
       msgs: this.msgs || [],
       inputContent: "",
       onContent: {},
-      ERROR_CODES: this.$store.state.ERROR_CODES,
+      lastTextLength: 0,
     }
   },
   metaInfo: {
@@ -124,103 +127,73 @@ export default {
       },
     ],
   },
-  computed: {
-    username() {
-      return localStorage.username
-    },
-    roomID() {
-      return localStorage.roomID
-    },
-    avatarURL() {
-      return localStorage.avatarURL
-    },
-    userID() {
-      return localStorage.userID
-    },
-    // 消息id
-    messageId() {
-      const len = this.msgs.length
-      if (!this.msgs || len === 0) {
-        return 0
+  watch: {
+    inputContent(newData) {
+      const len = newData.length
+      if (this.lastTextLength === 0 && len > 0) {
+        this.$socket.client.emit("sendTyping", {
+          roomID: roomID,
+          userID: this.user.userID,
+          type: CONST.TYPING_ON,
+        })
       }
-      return this.msgs[this.msgs.length - 1].id + 1
+      if (this.lastTextLength > 0 && len === 0) {
+        this.$socket.client.emit("sendTyping", {
+          roomID: roomID,
+          userID: this.user.userID,
+          type: CONST.TYPING_OFF,
+        })
+      }
+      this.lastTextLength = len
     },
-    message() {
+  },
+  computed: {
+    ...mapState({
+      user: "user",
+      messagesList: "messagesList",
+    }),
+    sendMessageParam() {
       return {
-        roomID: this.roomID,
-        userID: this.userID,
+        roomID: roomID,
+        userID: this.user.userID,
         type: 1,
         message: this.inputContent,
       }
     },
-    showMessage() {
-      return {
-        date: this.moment().format("YYYY-MM-DD HH:mm:ss"),
-        from: `${localStorage.username}`,
-        content: this.inputContent,
-        avatarURL: this.avatarURL,
-        id: this.id,
-        self: true,
-      }
-    },
   },
-  sockets: {
-    connect() {
-      console.log("socket connection succeed")
-    },
-    socketerror(param) {
-      if (param.code) {
-        console.err("Error", this.ERROR_CODES[param.code])
-      } else {
-        console.err("Error", "Unknown Error")
-      }
-    },
-    newUser(param) {
-      // 登陆提示
-      console.log(param)
-    },
-    userLeft(param) {
-      // 退出提示
-      console.log(param)
-    },
-    newMessage(param) {
-      console.log(param)
-    },
-    sendTyping(param) {
-      console.log(param)
-    },
-    login(param) {
-      console.log(param)
-    },
-    logout(param) {
-      console.log(param)
-    },
-    messageUpdated(param) {
-      console.log(param)
-    },
-  },
-
-  beforeRouteEnter(to, from, next) {
-    if (!localStorage.username) {
-      next("/")
-    } else {
-      next()
-    }
-  },
-
-  mounted() {
-    setTimeout(() => {
-      this.scrollToBottom()
-    }, 0)
-  },
-
   methods: {
-    onSend() {
-      if (this.inputContent === "") {
-        return
+    self(userID) {
+      if (userID === this.user.userID) {
+        console.log("self", userID, this.user)
+        return true
       } else {
-        this.$socket.client.emit("sendMessage", this.message)
-        console.log(this.$store.state.message)
+        return false
+      }
+    },
+    scrollToBottom() {
+      this.$refs.scroller.scrollToBottom()
+    },
+    login() {
+      if (this.user.userID == "") {
+        throw Error("userID is null")
+      } else if (roomID == "") {
+        throw Error("roomId is null")
+      } else {
+        this.$socket.client.emit("login", {
+          userID: this.user.userID,
+          roomID: roomID,
+        })
+      }
+    },
+    getMessagesList() {},
+    sendMessage() {
+      if (this.inputContent === "") {
+        alert("输入为空")
+        return
+      } else if (this.user.userID == "") {
+        this.$router.push("/")
+      } else {
+        this.$socket.client.emit("sendMessage", this.sendMessageParam)
         this.msgs.push(this.showMessage)
         this.inputContent = ""
         setTimeout(() => {
@@ -228,29 +201,89 @@ export default {
         })
       }
     },
-    scrollToBottom() {
-      this.$refs.scroller.scrollToBottom()
+    sendTyping() {
+      this.$socket.client.emit("sendTyping", {
+        userID: this.user.userID,
+        roomID: roomID,
+        type: 1,
+      })
     },
+    openMessage() {
+      this.$socket.client.emit("openMessage", {
+        userID: this.user.userID,
+        messageIDs: [],
+      })
+    },
+  },
+  sockets: {
+    socketerror(param) {
+      if (param.code) {
+        console.error("Error", CONST.ERROR_CODES[param.code])
+      } else {
+        console.error("Error", "Unknown Error")
+      }
+    },
+    newUser(param) {
+      // 登陆提示
+      param
+    },
+    userLeft(param) {
+      // 退出提示
+      param
+    },
+    newMessage(param) {
+      const messageID = param["_id"]
+      const openMessageParams = {
+        userID: this.user.userID,
+        messageIDs: [messageID],
+      }
+      this.$socket.client.emit("openMessage", openMessageParams)
+      setTimeout(() => {
+        this.scrollToBottom()
+      })
+    },
+    sendTyping(param) {
+      // 输入提示
+      param
+    },
+    login(param) {
+      param
+    },
+    logout(param) {
+      param
+    },
+    messageUpdated(param) {
+      param
+    },
+  },
+
+  beforeRouteEnter(to, from, next) {
+    next(vm => {
+      if (!vm.$store.state.user.userID) {
+        vm.$router.push("/")
+      }
+    })
+  },
+
+  mounted() {
+    this.login()
+    setTimeout(() => {
+      this.scrollToBottom()
+    }, 0)
   },
 }
 </script>
 
 <style lang="less">
-body {
-  height: 100vh;
-}
 .chatting {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
 }
 header {
   width: 100%;
   border: 1px solid rgb(235, 237, 240);
   height: 8vh;
-}
-main {
-  height: 86vh;
 }
 .scroller {
   flex: 1;

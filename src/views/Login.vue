@@ -12,6 +12,7 @@
       placeholder="用户名"
       autoFocus
       allowClear
+      required
     >
     </a-input-search>
   </div>
@@ -29,32 +30,39 @@ Vue.use(Input)
 Vue.use(UUID)
 
 export default {
-  username: "login",
   data() {
     return { username: "" }
   },
   methods: {
     login() {
       if (this.username === "") {
-        throw Error("用户名为空")
+        alert("输入为空")
+        return
       }
-      const avatarURL = this.username.slice(0, 1).toUpperCase()
-      const userID = this.$uuid.v5(this.username, NAMESPACE)
-      this.axios
-        .post("/user/login", {
-          name: this.username,
-          avatarURL: avatarURL,
-          roomID: roomID,
-          userID: userID,
-        })
-        .then(response => {
-          this.$store.commit("setToken", response.data.data.token)
-        })
-      this.$store.commit("setName", this.username)
-      this.$store.commit("setAvatarURL", avatarURL)
-      this.$store.commit("setRoomID", roomID)
-      this.$store.commit("setUserID", userID)
-      this.$router.push("Chatting")
+      this.axios.post("/user/login", this.loginParam).then(response => {
+        if (response.status == 200 && response.data.code == 1) {
+          const user = response.data.data.user
+          this.$store.commit("setUser", {
+            userID: user.userID,
+            name: user.name,
+            avatarURL: user.avatarURL,
+            token: user.token,
+          })
+          this.$router.push("Chatting")
+        } else {
+          console.log("login response error")
+        }
+      })
+    },
+  },
+  computed: {
+    loginParam() {
+      return {
+        name: this.username,
+        avatarURL: this.username.slice(0, 1).toUpperCase(),
+        roomID: roomID,
+        userID: this.$uuid.v5(this.username, NAMESPACE),
+      }
     },
   },
 }
@@ -62,6 +70,9 @@ export default {
 <style lang="less">
 .login {
   padding-top: 45vh;
+}
+.input {
+  padding: 0 0.75rem;
 }
 @media screen and (min-device-width: 400px) {
   .input {
