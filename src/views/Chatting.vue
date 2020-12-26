@@ -1,10 +1,14 @@
 <template>
   <div class="chatting">
     <header>
-      <a-page-header title="沟通ing" @back="$router.push('/')" />
+      <a-page-header title="沟通ing" @back="$router.push('/')">
+        <div v-if="typingUser" slot="subTitle">
+          {{ typingUser.name }}正在输入
+        </div>
+      </a-page-header>
     </header>
     <dynamic-scroller
-      :items="messagesList"
+      :items="msgs"
       :min-item-size="54"
       class="scroller"
       ref="scroller"
@@ -18,8 +22,14 @@
           :size-dependencies="[item.message]"
           :data-index="index"
         >
+          <div class="newUser" v-if="item.status === 'join'">
+            欢迎 {{ item.name }} 加入
+          </div>
+          <div class="userLeft" v-else-if="item.status === 'left'">
+            {{ item.name }} 离开
+          </div>
           <!-- self right -->
-          <div v-if="self(item.userID)" class="self">
+          <div v-else-if="self(item.userID)" class="self">
             <div class="self">
               <div class="avatar">
                 <a-avatar style="color: #f56a00; backgroundColor: #fde3cf">
@@ -29,13 +39,21 @@
               <div class="content">
                 <div class="author">
                   <a class="name">{{ item.user.name }}</a>
-                  <a-tooltip class="time" :title="item.created">
-                    <span>{{ moment(item.date).fromNow() }}</span>
+                  <a-tooltip
+                    class="time"
+                    :title="moment(item.created).format('YYYY-MM-DD HH:mm:ss')"
+                  >
+                    <span>{{ moment(item.created).fromNow() }}</span>
                   </a-tooltip>
                 </div>
-                <p class="message">
-                  {{ item.message }}
-                </p>
+                <div class="message">
+                  <p>
+                    {{ item.message }}
+                  </p>
+                </div>
+                <div class="seen" v-if="isSeenByOthers(item)">
+                  <span>已读</span>
+                </div>
               </div>
             </div>
           </div>
@@ -89,6 +107,7 @@ import {
   Col,
 } from "ant-design-vue"
 import CONST from "@/consts.js"
+import UUID from "vue-uuid"
 
 Vue.use(PageHeader)
 Vue.use(Comment)
@@ -98,6 +117,7 @@ Vue.use(Avatar)
 Vue.use(Button)
 Vue.use(Row)
 Vue.use(Col)
+Vue.use(UUID)
 
 const roomID = process.env.VUE_APP_ROOM_ID
 
@@ -109,10 +129,12 @@ export default {
   },
   data() {
     return {
-      msgs: this.msgs || [],
       inputContent: "",
-      onContent: {},
       lastTextLength: 0,
+      userList: [],
+      newUserName: "",
+      typingUser: null,
+      messages: [],
     }
   },
   metaInfo: {
@@ -148,6 +170,11 @@ export default {
     },
   },
   computed: {
+    msgs: {
+      get() {
+        return this.messagesList ? this.messagesList : []
+      },
+    },
     ...mapState({
       user: "user",
       messagesList: "messagesList",
@@ -164,7 +191,6 @@ export default {
   methods: {
     self(userID) {
       if (userID === this.user.userID) {
-        console.log("self", userID, this.user)
         return true
       } else {
         return false
@@ -182,19 +208,17 @@ export default {
         this.$socket.client.emit("login", {
           userID: this.user.userID,
           roomID: roomID,
+          name: this.user.name,
         })
       }
     },
-    getMessagesList() {},
     sendMessage() {
       if (this.inputContent === "") {
-        alert("输入为空")
         return
       } else if (this.user.userID == "") {
         this.$router.push("/")
       } else {
         this.$socket.client.emit("sendMessage", this.sendMessageParam)
-        this.msgs.push(this.showMessage)
         this.inputContent = ""
         setTimeout(() => {
           this.scrollToBottom()
@@ -208,11 +232,23 @@ export default {
         type: 1,
       })
     },
-    openMessage() {
-      this.$socket.client.emit("openMessage", {
-        userID: this.user.userID,
-        messageIDs: [],
-      })
+    async getMessages(lastMessageID) {
+      await this.axios
+        .get(`/message/list/${roomID}/${lastMessageID}`)
+        .then(response => {
+          this.messages = response.data.data.messages
+        })
+    },
+    isSeenByOthers(item) {
+      if (item.seenBy && item.seenBy.length > 0) {
+        return item.seenBy.some(i => {
+          if (i.user.userID !== this.user.userID) {
+            return true
+          }
+          return false
+        })
+      }
+      return false
     },
   },
   sockets: {
@@ -224,15 +260,32 @@ export default {
       }
     },
     newUser(param) {
-      // 登陆提示
-      param
+      param._id = this.$uuid.v1()
+      param.status = "join"
+      if (this.msgs) {
+        this.msgs.push(param)
+      } else {
+        this.msgs = [param]
+      }
     },
     userLeft(param) {
-      // 退出提示
-      param
+      param.status = "left"
+      param._id = this.$uuid.v1()
+      if (this.msgs) {
+        this.msgs.push(param)
+      } else {
+        this.msgs = [param]
+      }
     },
     newMessage(param) {
       const messageID = param["_id"]
+      if (this.msgs.length < 50) {
+        this.getMessages(messageID)
+        this.$store.state.messagesList = [
+          ...this.messages,
+          ...this.$store.state.messagesList,
+        ]
+      }
       const openMessageParams = {
         userID: this.user.userID,
         messageIDs: [messageID],
@@ -244,16 +297,19 @@ export default {
     },
     sendTyping(param) {
       // 输入提示
-      param
-    },
-    login(param) {
-      param
-    },
-    logout(param) {
-      param
+      if (param.userID !== this.user.userID) {
+        this.typingUser = param.user
+      }
     },
     messageUpdated(param) {
-      param
+      this.$store.state.messagesList = this.msgs.map(item => {
+        param.forEach(i => {
+          if (item.seenBy && item._id === i._id) {
+            item.seenBy = i.seenBy
+          }
+        })
+        return item
+      })
     },
   },
 
@@ -264,12 +320,23 @@ export default {
       }
     })
   },
+  beforeRouteLeave(to, from, next) {
+    this.$socket.disconnected
+    next()
+  },
 
   mounted() {
-    this.login()
-    setTimeout(() => {
-      this.scrollToBottom()
-    }, 0)
+    if (!this.user.userID) {
+      this.$router.push("/")
+    } else {
+      this.login()
+      setTimeout(() => {
+        this.scrollToBottom()
+      }, 0)
+      setInterval(() => {
+        this.typingUser = null
+      }, 3000)
+    }
   },
 }
 </script>
@@ -289,13 +356,11 @@ header {
   flex: 1;
   overflow-y: auto;
   padding: 0 1rem;
+  border: 1px solid #ebedf0;
 }
 @media screen and (min-device-width: 400px) {
   .chatting {
-    margin: 0 10rem;
-  }
-  main {
-    border: 1px solid #ebedf0;
+    margin: 0 8vw;
   }
 }
 footer {
@@ -332,12 +397,15 @@ footer {
   padding-right: 0.5rem;
 }
 .content {
-  display: flex;
-  flex-direction: column;
+  color: #000000a6;
   line-height: 1.5;
+  box-sizing: border-box;
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 1px;
 }
 .author {
-  color: rgba(0, 0, 0, 0.65);
+  color: #000000a6;
   display: flex;
   flex-wrap: wrap;
   flex-direction: row-reverse;
@@ -354,14 +422,36 @@ footer {
   transition: color 0.3s;
   touch-action: manipulation;
   background-color: transparent;
-  color: rgba(0, 0, 0, 0.45);
+  color: #00000073;
   font-size: 0.75rem;
   line-height: 1.125rem;
 }
+.newUser,
+.userLeft {
+  height: 2rem;
+  text-align: center;
+  line-height: 2rem;
+  color: #ccc;
+}
 .message {
-  line-height: 1.5;
+  display: border-box;
+}
+
+.message > p {
   margin-top: 0;
   margin-bottom: 1em;
   white-space: pre-wrap;
+}
+.seen {
+  padding-left: 0;
+  margin-top: 0.75rem;
+  margin-bottom: 1em;
+}
+.seen > span {
+  margin-top: 0;
+  margin-bottom: 1em;
+  color: #00000073;
+  font-size: 0.75rem;
+  cursor: pointer;
 }
 </style>

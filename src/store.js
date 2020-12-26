@@ -12,6 +12,7 @@ export default new Vuex.Store({
       userID: "",
     },
     messagesList: [],
+    token: "",
   },
   mutations: {
     setUser(state, user) {
@@ -19,7 +20,9 @@ export default new Vuex.Store({
     },
     messagesList(state, message) {
       state.messagesList.push(message)
-      console.log("messagesList:", state.messagesList)
+    },
+    setToken(state, token) {
+      state.token = token
     },
   },
   actions: {
