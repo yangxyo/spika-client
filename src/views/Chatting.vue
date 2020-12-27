@@ -22,15 +22,15 @@
           :size-dependencies="[item.message]"
           :data-index="index"
         >
-          <div class="newUser" v-if="item.status === 'join'">
-            欢迎 {{ item.name }} 加入
+          <div class="newUser" v-if="item.type == 1000">
+            欢迎 {{ item.user.name }} 加入
           </div>
-          <div class="userLeft" v-else-if="item.status === 'left'">
-            {{ item.name }} 离开
+          <div class="userLeft" v-else-if="item.type == 1001">
+            {{ item.user.name }} 离开
           </div>
           <!-- self right -->
-          <div v-else-if="self(item.userID)" class="self">
-            <div class="self">
+          <div v-else-if="item.type == 1 && self(item.userID)" class="self">
+            <div class="self-inner">
               <div class="avatar">
                 <a-avatar style="color: #f56a00; backgroundColor: #fde3cf">
                   {{ item.user.avatarURL }}
@@ -57,8 +57,8 @@
               </div>
             </div>
           </div>
-          <!-- others left -->
-          <a-comment v-else>
+          <!-- others messages -->
+          <a-comment v-else-if="item.type == 1">
             <a slot="author">{{ item.user.name }}</a>
             <a-avatar
               slot="avatar"
@@ -213,16 +213,11 @@ export default {
       }
     },
     sendMessage() {
-      if (this.inputContent === "") {
-        return
-      } else if (this.user.userID == "") {
+      if (!this.user.userID) {
         this.$router.push("/")
-      } else {
+      } else if (this.sendMessageParam.message) {
         this.$socket.client.emit("sendMessage", this.sendMessageParam)
         this.inputContent = ""
-        setTimeout(() => {
-          this.scrollToBottom()
-        })
       }
     },
     sendTyping() {
@@ -260,40 +255,29 @@ export default {
       }
     },
     newUser(param) {
-      param._id = this.$uuid.v1()
-      param.status = "join"
-      if (this.msgs) {
-        this.msgs.push(param)
-      } else {
-        this.msgs = [param]
-      }
+      param
     },
     userLeft(param) {
-      param.status = "left"
-      param._id = this.$uuid.v1()
-      if (this.msgs) {
-        this.msgs.push(param)
-      } else {
-        this.msgs = [param]
-      }
+      param
     },
     newMessage(param) {
-      const messageID = param["_id"]
-      if (this.msgs.length < 50) {
-        this.getMessages(messageID)
-        this.$store.state.messagesList = [
-          ...this.messages,
-          ...this.$store.state.messagesList,
-        ]
-      }
+      const messageID = [param["_id"]]
       const openMessageParams = {
         userID: this.user.userID,
-        messageIDs: [messageID],
+        messageIDs: messageID,
+      }
+
+      if (this.msgs.length < 50) {
+        this.getMessages(messageID)
+        this.messages.forEach(item => {
+          openMessageParams.messageIDs.push(item._id)
+        })
+        this.$store.commit("addOldMessages", this.messages)
       }
       this.$socket.client.emit("openMessage", openMessageParams)
       setTimeout(() => {
         this.scrollToBottom()
-      })
+      }, 0)
     },
     sendTyping(param) {
       // 输入提示
@@ -324,7 +308,6 @@ export default {
     this.$socket.disconnected
     next()
   },
-
   mounted() {
     if (!this.user.userID) {
       this.$router.push("/")
@@ -335,7 +318,7 @@ export default {
       }, 0)
       setInterval(() => {
         this.typingUser = null
-      }, 3000)
+      }, 2500)
     }
   },
 }
@@ -371,21 +354,22 @@ footer {
 .ant-btn-lg {
   border-radius: 0;
 }
-.item {
-  margin: 0, 2rem;
-}
 .self {
+  box-sizing: border-box;
+  position: relative;
+}
+.self-inner {
+  box-sizing: border-box;
   display: flex;
+  padding: 1rem 0;
   flex-direction: row-reverse;
-  padding: 1rem 0;
-  margin-left: 0;
   line-height: 1.5;
-  padding: 1rem 0;
 }
 .avatar {
   margin-left: 0.75rem;
+  position: relative;
+  flex-shrink: 0;
   cursor: pointer;
-  line-height: 1.5;
 }
 .time {
   color: #ccc;
@@ -401,8 +385,7 @@ footer {
   line-height: 1.5;
   box-sizing: border-box;
   position: relative;
-  flex: 1 1 auto;
-  min-width: 1px;
+  min-width: 0.0625rem;
 }
 .author {
   color: #000000a6;
@@ -415,32 +398,26 @@ footer {
 .name {
   font-size: 0.75rem;
   line-height: 1.125rem;
-  box-sizing: border-box;
   text-decoration: none;
-  outline: none;
   cursor: pointer;
-  transition: color 0.3s;
-  touch-action: manipulation;
-  background-color: transparent;
   color: #00000073;
-  font-size: 0.75rem;
-  line-height: 1.125rem;
-}
-.newUser,
-.userLeft {
-  height: 2rem;
-  text-align: center;
-  line-height: 2rem;
-  color: #ccc;
 }
 .message {
-  display: border-box;
+  color: #000000a6;
+  overflow: hidden;
 }
-
 .message > p {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
   margin-top: 0;
   margin-bottom: 1em;
   white-space: pre-wrap;
+}
+.newUser,
+.userLeft {
+  text-align: center;
+  line-height: 2rem;
+  color: #ccc;
 }
 .seen {
   padding-left: 0;

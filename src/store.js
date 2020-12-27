@@ -18,8 +18,15 @@ export default new Vuex.Store({
     setUser(state, user) {
       state.user = user
     },
-    messagesList(state, message) {
-      state.messagesList.push(message)
+    addmessages(state, messages) {
+      messages instanceof Array
+        ? state.messagesList.push(...messages)
+        : state.messagesList.push(messages)
+    },
+    addOldMessages(state, messages) {
+      messages instanceof Array
+        ? state.messagesList.unshift(...messages)
+        : state.messagesList.unshift(messages)
     },
     setToken(state, token) {
       state.token = token
@@ -28,7 +35,7 @@ export default new Vuex.Store({
   actions: {
     socket_newMessage({ commit }, message) {
       if (message.message) {
-        commit("messagesList", message)
+        commit("addmessages", message)
       }
     },
   },
